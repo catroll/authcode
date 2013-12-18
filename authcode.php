@@ -3,14 +3,14 @@
 class AuthCode {
 
     public static function encode($str, $key) {
-        return self::_auth_words($str, 'ENCODE', $key, 0);
+        return self::_auth_code($str, 'ENCODE', $key, 0);
     }
 
     public static function decode($str, $key) {
-        return self::_auth_words($str, 'DECODE', $key, 0);
+        return self::_auth_code($str, 'DECODE', $key, 0);
     }
 
-    public static function _auth_words($string, $operation = 'DECODE', $key = '', $expiry = 3600) {
+    public static function _auth_code($string, $operation = 'DECODE', $key = '', $expiry = 3600) {
         /***
          * 随机密钥长度 取值 0-32;
          * 加入随机密钥，可以令密文无任何规律，即便是原文和密钥完全相同，加密结果也会每次不同，增大破解难度。
