@@ -44,16 +44,22 @@ class AuthCode(object):
         @return: 处理后的原文或者经过 base64_encode 处理后的密文
         """
 
-        # ----------------------- 获取随机密钥 -----------------------
-
-        rand_key_length = 4
         # 随机密钥长度 取值 0-32
         # 可以令密文无任何规律，即便是原文和密钥完全相同，加密结果也会每次不同，增大破解难度
         # 值越大，密文变动规律越大，密文变化 = 16 的 ckey_length 次方，如果为 0，则不产生随机密钥
+        rand_key_length = 4
 
+        ######################################################
+
+        # 一 密钥通过拆解和变形参与加密和解密
         key = cls._md5(key)
         key_a = cls._md5(key[:16])
         key_b = cls._md5(key[16:])
+
+        ######################################################
+
+        # 二 加密：生成 key_c，并处理 handling_string
+        #    解密：分拆出 key_c，handling_string
         if rand_key_length:
             if operation == 'DECODE':
                 key_c = input_string[:rand_key_length]
@@ -62,20 +68,26 @@ class AuthCode(object):
         else:
             key_c = ''
 
-        crypt_key = key_a + cls._md5(key_a + key_c)
-
         if operation == 'DECODE':
             handled_string = base64.b64decode(input_string[rand_key_length:])
         else:
             expiration_time = expiry + int(time.time) if expiry else 0
             handled_string = '%010d' % expiration_time + cls._md5(input_string + key_b)[:16] + input_string
 
+        ############################################################################################################
+
+        # 第三步，第四步，第五步其实实现的是一个按位异或的过程，如果重复一遍就能得到原来的数据。
+
+        # 三 使用 key_a 和 key_c 生成随机密钥
+
+        crypt_key = key_a + cls._md5(key_a + key_c)
         rand_key = list()
         for i in xrange(256):
             rand_key.append(ord(crypt_key[i % len(crypt_key)]))
 
-        # ----------------------------------------------------------
+        ######################################################
 
+        # 四 
         box = range(256)
         j = 0
         for i in xrange(256):
@@ -84,11 +96,14 @@ class AuthCode(object):
             box[i] = box[j]
             box[j] = tmp
 
-        #for i in xrange(len(box)):
-        #    print str(box[i]).rjust(5),
-        #    if ((i + 1) % 10) == 0:
-        #        print ''
+        # for i in xrange(len(box)):
+        #     print str(box[i]).rjust(5),
+        #     if ((i + 1) % 10) == 0:
+        #         print ''
 
+        ######################################################
+
+        # 五 
         result = ''
         a = 0
         j = 0
@@ -100,6 +115,11 @@ class AuthCode(object):
             box[j] = tmp
             result += chr(ord(handled_string[i])^(box[(box[a]+box[j])%256]))
 
+        ############################################################################################################
+
+        # 六 第二步的反操作
+        #    加密： 得到最终密文
+        #    解密： 的到最终明文
         if operation == 'DECODE':
             if (int(result[:10]) == 0 or (int(result[:10]) - time.time() > 0)) and \
                     (result[10:26] == cls._md5(result[26:] + key_b)[:16]):
