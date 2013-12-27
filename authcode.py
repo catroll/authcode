@@ -58,15 +58,15 @@ class AuthCode(object):
 
         ######################################################
 
-        # 二 加密：生成 key_c，并处理 handling_string
-        #    解密：分拆出 key_c，handling_string
+        # 二 加密：生成 rand_key，并处理 handling_string
+        #    解密：分拆出 rand_key，handling_string
         if rand_key_length:
             if operation == 'DECODE':
-                key_c = input_string[:rand_key_length]
+                rand_key = input_string[:rand_key_length]
             else:
-                key_c = cls._md5(str(time.time()))[-rand_key_length:]
+                rand_key = cls._md5(str(time.time()))[-rand_key_length:]
         else:
-            key_c = ''
+            rand_key = ''
 
         if operation == 'DECODE':
             handled_string = base64.b64decode(input_string[rand_key_length:])
@@ -74,50 +74,46 @@ class AuthCode(object):
             expiration_time = expiry + int(time.time) if expiry else 0
             handled_string = '%010d' % expiration_time + cls._md5(input_string + key_b)[:16] + input_string
 
-        ############################################################################################################
-
-        # 第三步，第四步，第五步其实实现的是一个按位异或的过程，如果重复一遍就能得到原来的数据。
-
-        # 三 使用 key_a 和 key_c 生成随机密钥
-
-        crypt_key = key_a + cls._md5(key_a + key_c)
-        rand_key = list()
-        for i in xrange(256):
-            rand_key.append(ord(crypt_key[i % len(crypt_key)]))
-
         ######################################################
 
-        # 四 
-        box = range(256)
+        # 三 生成加密解密密钥 crypt_key，并用其生成按位异或表
+        #    input  : key_a, rand_key
+        #    output : xor_table
+        crypt_key = key_a + cls._md5(key_a + rand_key)
+        # 其实这个地方起到的效果就相当于将 crypt_key * 4，然后逐位 ord
+        crypt_key = [ord(crypt_key[i % len(crypt_key)]) for i in xrange(256)]
+        xor_table = range(256)
         j = 0
         for i in xrange(256):
-            j = (j + box[i] + rand_key[i]) % 256
-            tmp = box[i]
-            box[i] = box[j]
-            box[j] = tmp
+            j = (j + xor_table[i] + crypt_key[i]) % 256
+            tmp = xor_table[i]
+            xor_table[i] = xor_table[j]
+            xor_table[j] = tmp
 
-        # for i in xrange(len(box)):
-        #     print str(box[i]).rjust(5),
+        # for i in xrange(len(xor_table)):
+        #     print str(xor_table[i]).rjust(5),
         #     if ((i + 1) % 10) == 0:
         #         print ''
 
         ######################################################
 
-        # 五 
+        # 四 移位的一个异或
+        #    因为本步骤中，table 没变，所以移位的异或没有改变异或的本质
+        #    如果重复一遍就能得到原来的数据
         result = ''
         a = 0
         j = 0
         for i in xrange(len(handled_string)):
             a = (a + 1) % 256
-            j = (j + box[a]) % 256
-            tmp = box[a]
-            box[a] = box[j]
-            box[j] = tmp
-            result += chr(ord(handled_string[i])^(box[(box[a]+box[j])%256]))
+            j = (j + xor_table[a]) % 256
+            tmp = xor_table[a]
+            xor_table[a] = xor_table[j]
+            xor_table[j] = tmp
+            result += chr(ord(handled_string[i]) ^ (xor_table[(xor_table[a] + xor_table[j]) % 256]))
 
-        ############################################################################################################
+        ######################################################
 
-        # 六 第二步的反操作
+        # 五 第二步的反操作
         #    加密： 得到最终密文
         #    解密： 的到最终明文
         if operation == 'DECODE':
@@ -127,7 +123,7 @@ class AuthCode(object):
             else:
                 output_string = ''
         else:
-            output_string = key_c + base64.b64encode(result)
+            output_string = rand_key + base64.b64encode(result)
 
         return output_string
 
